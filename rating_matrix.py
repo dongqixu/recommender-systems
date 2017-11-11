@@ -17,16 +17,39 @@ class RatingMatrix(object):
         self.lambda_q = lambda_q
 
         # matrix initialization
-        # self.mask = np.zeros((self.user_num, self.movie_num), dtype=np.int)
-        # self.ground_truth = np.zeros((self.user_num, self.movie_num), dtype=np.int)
+        self.mask = None
+        self.ground_truth = None
         self.user_matrix = np.random.random((self.user_num, self.feature_num)).astype(np.float64)
         self.movie_matrix = np.random.random((self.feature_num, self.movie_num)).astype(np.float64)
+        # TODO
+        # self.user_rated_count = np.zeros(self.user_num, dtype=np.float64)
+        self.movie_rated_count = np.zeros(self.movie_num, dtype=np.float64)
 
         # transpose
         self.transpose_rating = np.transpose(np.copy(self.rating_list))  # problem with memory sharing?
         self.train_user_id, self.train_movie_id, self.train_rating = self.transpose_rating[0:3, :]
         self.train_user_id -= 1
         self.train_movie_id -= 1
+        del self.transpose_rating  # memory
+
+        # TODO: problem with the incorrect statistics
+        user_rated_list, self.user_rated_count = np.unique(self.train_user_id, return_counts=True)
+        for test_i in range(len(user_rated_list)):
+            if user_rated_list[test_i] != test_i:
+                print(test_i)
+        # print('Test on User Rated List Passed.')
+        # TODO: Check whether it is right
+        movie_rated_list, movie_rated_count = np.unique(self.train_movie_id, return_counts=True)
+        movie_rated_dict = dict(zip(movie_rated_list, movie_rated_count))
+        for test_i in range(self.movie_num):
+            count = movie_rated_dict.get(test_i)
+            if count is not None:
+                self.movie_rated_count[test_i] = count
+        # print('Test on Movie Rated List Passed.')
+        # print(np.sum(self.user_rated_count), np.sum(self.movie_rated_count), len(self.train_rating))
+        self.user_rated_count = self.user_rated_count * self.lambda_p
+        self.movie_rated_count = self.movie_rated_count * self.lambda_q
+        # print(np.sum(self.user_rated_count), np.sum(self.movie_rated_count), len(self.train_rating))
 
         # self.fill_ground_truth_numpy()
 
@@ -49,6 +72,10 @@ class RatingMatrix(object):
 
     # deprecated
     def fill_ground_truth_loop(self):
+        # only initialize with calling
+        self.mask = np.zeros((self.user_num, self.movie_num), dtype=np.int)
+        self.ground_truth = np.zeros((self.user_num, self.movie_num), dtype=np.int)
+
         # index start from zero
         for _, temp_rating in enumerate(self.rating_list):
             user_id, movie_id, user_movie_rating, _ = temp_rating
@@ -58,6 +85,10 @@ class RatingMatrix(object):
             self.mask[user_id, movie_id] = 1
 
     def fill_ground_truth_numpy(self):
+        # only initialize with calling
+        self.mask = np.zeros((self.user_num, self.movie_num), dtype=np.int)
+        self.ground_truth = np.zeros((self.user_num, self.movie_num), dtype=np.int)
+
         self.ground_truth[self.train_user_id, self.train_movie_id] = self.train_rating
         self.mask[self.train_user_id, self.train_movie_id] = 1
 
@@ -86,8 +117,9 @@ class RatingMatrix(object):
         intermediate_rating = self.user_matrix[self.train_user_id, :] * np.transpose(
             self.movie_matrix[:, self.train_movie_id])
         predict_rating = np.sum(intermediate_rating, axis=1)
-        error = self.train_rating - predict_rating
-        euclidean_distance_loss = np.sum(error * error)
+        del intermediate_rating  # memory
+        predict_rating = self.train_rating - predict_rating
+        euclidean_distance_loss = np.sum(predict_rating * predict_rating)
         return euclidean_distance_loss
 
     # deprecated
@@ -146,6 +178,7 @@ class RatingMatrix(object):
         intermediate_rating = self.user_matrix[self.train_user_id, :] * np.transpose(
             self.movie_matrix[:, self.train_movie_id])
         predict_rating = np.sum(intermediate_rating, axis=1)
+        del intermediate_rating  # memory
 
         # TODO: (k, i) * (i,) why?
         # user_up
@@ -186,12 +219,22 @@ class RatingMatrix(object):
         '''
 
         # each user entry
+        '''lambda_p: constant, I_u: (user_num,), p_uk: (user_num, k)'''
+        '''create a I_u member variable, put and give shifting'''
+        # print('Shape', self.user_matrix.shape, self.user_rated_count.shape)
+        combine = np.transpose(np.transpose(self.user_matrix) * self.user_rated_count)
         user_down += 1e-5
+        user_down += combine
         self.user_matrix *= (user_up / user_down)
+        del combine
 
         # each movie entry
+        # print('Shape', self.movie_matrix.shape, self.movie_rated_count.shape)
+        combine = self.movie_matrix * self.movie_rated_count
         item_down += 1e-5
+        item_down += combine
         self.movie_matrix *= (item_up / item_down)
+        del combine
 
     # deprecated
     def update_matrix(self):
@@ -216,35 +259,35 @@ class RatingMatrix(object):
 
 
 if __name__ == '__main__':
-    np.random.seed(0)
-    start_time = time.time()
+    # np.random.seed(0)
+    # R.fill_ground_truth_numpy()
 
-    R = RatingMatrix(feature_num=200, lambda_p=0.1, lambda_q=0.1)
-    print(f'Loss: {R.get_loss_numpy()}')
+    # file operation
+    line_buffer = 1
+    log = open('loss.txt', 'w', buffering=line_buffer)
 
-    # R.update_loop_based()
-    for i in range(5):
-        R.update_numpy()
-        print(f'Loss: {R.get_loss_numpy()}')
-    # R.update_matrix_based()
+    # parameter setting
+    lambda_pq_list = [0.02*(x+1) for x in range(10)]
+    feature_list = [200*(x+1) for x in range(8)]
+    train_epoch = 100
 
-    print(f'Loss: {R.get_loss_numpy()}')
-    print(f'time: {time.time() - start_time:{5}.{4}}, loss')
+    for lambda_pq in lambda_pq_list:
+        for feature_num in feature_list:
+            R = RatingMatrix(feature_num=feature_num, lambda_p=lambda_pq, lambda_q=lambda_pq)
+            print(f'Parameters: ({lambda_pq} {feature_num})\n'
+                  f'Initial Loss: '
+                  f'{R.get_loss_numpy():{12}.{8}}')
+            log.write(f'Parameters: {feature_num} {lambda_pq}\n'
+                      f'0 {R.get_loss_numpy():{12}.{8}}\n')
+            for epoch in range(train_epoch):
+                start_time = time.time()
+                R.update_numpy()
+                loss = R.get_loss_numpy()
+                log_string = f'[Epoch] {epoch+1}, time: {time.time() - start_time:{5}.{4}}, loss {loss:{12}.{8}}'
+                print(log_string)
+                log.write(f'{epoch+1} {loss}\n')
+            print('------------------------------------------------------------------------------------')
+            log.write('------------------------------------------------------------------------------------\n')
 
-    '''
-    train_epoch = 50
-
-    feature_list = [5000*(x+1) for x in range(3)]
-
-    for feature_num in feature_list:
-        R = RatingMatrix(feature_num=feature_num, lambda_p=0.1, lambda_q=0.1)
-        R.print_parameters()
-        print(f'Initial loss: {R.get_loss_matrix_based()}')
-        for epoch in range(train_epoch):
-            start_time = time.time()
-            # R.update_loop_based()
-            R.update_matrix_based()
-            loss = R.get_loss_matrix_based()
-            print(f'[Epoch] {epoch+1}, time: {time.time() - start_time:{5}.{4}}, loss {loss:{12}.{8}}')
-        print('------------------------------------------------------------------------------------')
-    '''
+    # file operation
+    log.close()

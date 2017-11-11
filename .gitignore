@@ -105,3 +105,4 @@ ENV/
 # personal
 .idea/
 .DS_Store
+loss.txt
