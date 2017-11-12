@@ -47,6 +47,19 @@ class RatingMatrix(object):
                 self.movie_rated_count[test_i] = count
         # print('Test on Movie Rated List Passed.')
         # print(np.sum(self.user_rated_count), np.sum(self.movie_rated_count), len(self.train_rating))
+
+        '''
+        uu = np.zeros(self.user_num, dtype=np.int)
+        for ii in range(len(self.train_user_id)):
+            uu[self.train_user_id[ii]] += 1
+        print('uu', np.array_equal(uu, self.user_rated_count))
+
+        mm = np.zeros(self.movie_num, dtype=np.int)
+        for ii in range(len(self.train_movie_id)):
+            mm[self.train_movie_id[ii]] += 1
+        print('mm', np.array_equal(mm, self.movie_rated_count))
+        '''
+
         self.user_rated_count = self.user_rated_count * self.lambda_p
         self.movie_rated_count = self.movie_rated_count * self.lambda_q
         # print(np.sum(self.user_rated_count), np.sum(self.movie_rated_count), len(self.train_rating))
@@ -157,14 +170,14 @@ class RatingMatrix(object):
         # each user entry
         for u in range(self.user_num):
             for k in range(self.feature_num):
-                user_down[u][k] += 1e-5
+                user_down[u][k] += 1e-5 + self.user_rated_count[u] * self.user_matrix[u][k]
                 # update
                 self.user_matrix[u][k] *= (user_up[u][k] / user_down[u][k])
 
         # each movie entry
         for i in range(self.movie_num):
             for k in range(self.feature_num):
-                item_down[k][i] += 1e-5
+                item_down[k][i] += 1e-5 + self.movie_rated_count[i] * self.movie_matrix[k][i]
                 # update
                 self.movie_matrix[k][i] *= (item_up[k][i] / item_down[k][i])
 
@@ -243,13 +256,14 @@ class RatingMatrix(object):
         # user feature update
         q_transpose = np.transpose(np.copy(self.movie_matrix))
         up = np.dot(self.ground_truth, q_transpose)
-        down = np.dot(predict_r, q_transpose) + 1e-5
+        down = np.dot(predict_r, q_transpose) + 1e-5 + np.transpose(
+            np.transpose(self.user_matrix) * self.user_rated_count)
         p_update_multiply = up / down
 
         # movie characteristic update
         p_transpose = np.transpose(np.copy(self.user_matrix))
         up = np.dot(p_transpose, self.ground_truth)
-        down = np.dot(p_transpose, predict_r) + 1e-5
+        down = np.dot(p_transpose, predict_r) + 1e-5 + self.movie_matrix * self.movie_rated_count
         # debug
         q_update_multiply = up / down
 
@@ -260,7 +274,6 @@ class RatingMatrix(object):
 
 if __name__ == '__main__':
     # np.random.seed(0)
-    # R.fill_ground_truth_numpy()
 
     # file operation
     line_buffer = 1
@@ -269,11 +282,14 @@ if __name__ == '__main__':
     # parameter setting
     lambda_pq_list = [0.02*(x+1) for x in range(10)]
     feature_list = [200*(x+1) for x in range(8)]
-    train_epoch = 100
+    train_epoch = 200  # 100?
 
-    for lambda_pq in lambda_pq_list:
-        for feature_num in feature_list:
+    for feature_num in feature_list:
+        for lambda_pq in lambda_pq_list:
             R = RatingMatrix(feature_num=feature_num, lambda_p=lambda_pq, lambda_q=lambda_pq)
+
+            R.fill_ground_truth_numpy()  # use matrix operation
+
             print(f'Parameters: ({lambda_pq} {feature_num})\n'
                   f'Initial Loss: '
                   f'{R.get_loss_numpy():{12}.{8}}')
@@ -281,7 +297,10 @@ if __name__ == '__main__':
                       f'0 {R.get_loss_numpy():{12}.{8}}\n')
             for epoch in range(train_epoch):
                 start_time = time.time()
-                R.update_numpy()
+
+                # R.update_numpy()
+                R.update_matrix()  # user matrix operation
+
                 loss = R.get_loss_numpy()
                 log_string = f'[Epoch] {epoch+1}, time: {time.time() - start_time:{5}.{4}}, loss {loss:{12}.{8}}'
                 print(log_string)
