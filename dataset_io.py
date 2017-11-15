@@ -1,5 +1,6 @@
 import time
 import torch
+from operator import itemgetter
 
 '''Read dataset with pytorch'''
 
@@ -46,6 +47,7 @@ def extract_rating(user_num, movie_num, file='dataset/ratings.dat'):
             user_rate[user_id] += 1
             movie_rate[movie_id] += 1
             rating.append((int(user_id), int(movie_id), int(user_movie_rating)))  # remove int(timestamp)
+    rating = sorted(rating, key=itemgetter(0, 1))
     # pytorch
     if torch.cuda.is_available():
         rating = torch.cuda.IntTensor(rating)
@@ -56,6 +58,36 @@ def extract_rating(user_num, movie_num, file='dataset/ratings.dat'):
         user_rate = torch.FloatTensor(user_rate)
         movie_rate = torch.FloatTensor(movie_rate)
     return rating, user_rate, movie_rate
+
+
+def get_record_index(user_num, movie_num, file='dataset/ratings.dat'):
+    user_index = [[] for _ in range(user_num)]
+    movie_index = [[] for _ in range(movie_num)]
+    with open(file, 'r', encoding='ISO-8859-1') as rating_file:
+        rating_line = read_file(rating_file)
+        for line in rating_line:
+            user_id, movie_id, _, _ = line
+            user_id = int(user_id) - 1
+            movie_id = int(movie_id) - 1
+            user_index[user_id].append(movie_id)
+            movie_index[movie_id].append(user_id)
+
+    # pytorch
+    if torch.cuda.is_available():
+        for u in range(user_num):
+            user_index[u].sort()
+            user_index[u] = torch.cuda.IntTensor(user_index[u])
+        for i in range(movie_num):
+            movie_index[i].sort()
+            movie_index[i] = torch.cuda.IntTensor(movie_index[i])
+    else:
+        for u in range(user_num):
+            user_index[u].sort()
+            user_index[u] = torch.IntTensor(user_index[u])
+        for i in range(movie_num):
+            movie_index[i].sort()
+            movie_index[i] = torch.IntTensor(movie_index[i])
+    return user_index, movie_index
 
 
 if __name__ == '__main__':
@@ -74,7 +106,18 @@ if __name__ == '__main__':
           ' UserID::MovieID::Rating::Timestamp')
     print(f'Shape and Sample:\n'
           f' {rating_list.shape}\n'
-          f' {rating_list[-1]}')
+          f' {rating_list[0:5]}')
 
     end_time = time.time()
     print(f'\nTime: {end_time - start_time}')
+
+    user_index_list, movie_index_list = get_record_index(6040, 3952)
+    print(user_index_list[0][0:10])
+    print(f'\nTime: {time.time() - end_time}')
+    count = 0
+    for u in range(len(user_index_list)):
+        for i in range(len(user_index_list[u])):
+            if rating_list[count][0] != u or rating_list[count][1] != user_index_list[u][i]:
+                print(u, i)
+                exit(1)
+            count += 1
