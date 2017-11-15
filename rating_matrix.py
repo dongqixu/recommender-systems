@@ -1,7 +1,7 @@
 import numpy as np
 import time
 import torch
-from dataset_io import extract_rating
+from dataset_io import extract_rating, get_record_index
 
 
 class RatingMatrix(object):
@@ -14,6 +14,7 @@ class RatingMatrix(object):
         self.movie_num = 3952
         self.rating_list, self.user_rate_count, self.movie_rate_count = \
             extract_rating(self.user_num, self.movie_num)  # pytorch tensor
+        self.user_index_list, self.movie_index_list = get_record_index(self.user_num, self.movie_num)
 
         # parameter
         self.feature_num = feature_num
@@ -24,13 +25,16 @@ class RatingMatrix(object):
         if self.cuda_enable:
             self.user_matrix = torch.cuda.FloatTensor(self.user_num, self.feature_num).uniform_(0, 1)
             self.movie_matrix = torch.cuda.FloatTensor(self.feature_num, self.movie_num).uniform_(0, 1)
+            self.predict_rating = torch.cuda.FloatTensor(len(self.rating_list)).fill_(0)
         else:
             self.user_matrix = torch.FloatTensor(self.user_num, self.feature_num).uniform_(0, 1)
             self.movie_matrix = torch.FloatTensor(self.feature_num, self.movie_num).uniform_(0, 1)
+            self.predict_rating = torch.zeros(len(self.rating_list))
 
         # transpose
         self.transpose_rating = torch.transpose(self.rating_list, dim0=0, dim1=1)
-        self.train_user_id, self.train_movie_id, self.train_rating = self.transpose_rating
+        _, _, self.train_rating = self.transpose_rating
+        self.train_rating = self.train_rating.float()
 
         # combine lambda
         self.user_rate_count = torch.mul(self.user_rate_count, self.lambda_p)
@@ -39,18 +43,30 @@ class RatingMatrix(object):
         print(f'Features: {self.feature_num}\n'
               f'Lambda P: {self.lambda_p}\n'
               f'Lambda Q: {self.lambda_q}\n')
-        exit(1)
 
-    def get_loss_numpy(self):
+    def get_loss(self):
         # u == i
         # self.user_matrix[self.train_user_id, :] -> (u, k)
         # self.movie_matrix[:, self.train_movie_id]) -> (k, i)
-        intermediate_rating = self.user_matrix[self.train_user_id, :] * np.transpose(
-            self.movie_matrix[:, self.train_movie_id])
-        predict_rating = np.sum(intermediate_rating, axis=1)
-        del intermediate_rating  # memory
-        predict_rating = self.train_rating - predict_rating
-        euclidean_distance_loss = np.sum(predict_rating * predict_rating)
+
+        # zero init
+        pointer = 0
+        self.predict_rating = self.predict_rating.fill_(0)
+        start_time = time.time()
+        for u in range(self.user_num):
+            # further cut on self.user_index_list[u]
+            user_feature = self.user_matrix[u, :]
+            movie_feature = self.movie_matrix[:, self.user_index_list[u]]
+            # transpose -> matrix multiplication
+            u_prediction = torch.mm(torch.t(movie_feature), user_feature.unsqueeze(1))
+
+            shift = len(self.user_index_list[u])
+            self.predict_rating[pointer:pointer+shift] = u_prediction.view(-1)
+            pointer += shift
+        print(time.time()-start_time)
+        self.predict_rating = self.train_rating - self.predict_rating
+        euclidean_distance_loss = (self.predict_rating * self.predict_rating).sum()
+        exit(1)
         return euclidean_distance_loss
 
     def update_numpy(self):
@@ -123,6 +139,7 @@ if __name__ == '__main__':
     train_epoch = 200  # 100?
 
     R = RatingMatrix(feature_num=100, lambda_p=0.1, lambda_q=0.1)
+    R.get_loss()
 
     for feature_num in feature_list:
         for lambda_pq in lambda_pq_list:
@@ -130,15 +147,15 @@ if __name__ == '__main__':
 
             print(f'Parameters: ({lambda_pq} {feature_num})\n'
                   f'Initial Loss: '
-                  f'{R.get_loss_numpy():{12}.{8}}')
+                  f'{R.get_loss():{12}.{8}}')
             log.write(f'Parameters: {feature_num} {lambda_pq}\n'
-                      f'0 {R.get_loss_numpy():{12}.{8}}\n')
+                      f'0 {R.get_loss():{12}.{8}}\n')
             for epoch in range(train_epoch):
                 start_time = time.time()
 
                 # R.update_numpy()
 
-                loss = R.get_loss_numpy()
+                loss = R.get_loss()
                 log_string = f'[Epoch] {epoch+1}, time: {time.time() - start_time:{5}.{4}}, loss {loss:{12}.{8}}'
                 print(log_string)
                 log.write(f'{epoch+1} {loss}\n')

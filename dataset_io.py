@@ -1,3 +1,4 @@
+import numpy as np
 import time
 import torch
 from operator import itemgetter
@@ -72,21 +73,13 @@ def get_record_index(user_num, movie_num, file='dataset/ratings.dat'):
             user_index[user_id].append(movie_id)
             movie_index[movie_id].append(user_id)
 
-    # pytorch
-    if torch.cuda.is_available():
-        for u in range(user_num):
-            user_index[u].sort()
-            user_index[u] = torch.cuda.IntTensor(user_index[u])
-        for i in range(movie_num):
-            movie_index[i].sort()
-            movie_index[i] = torch.cuda.IntTensor(movie_index[i])
-    else:
-        for u in range(user_num):
-            user_index[u].sort()
-            user_index[u] = torch.IntTensor(user_index[u])
-        for i in range(movie_num):
-            movie_index[i].sort()
-            movie_index[i] = torch.IntTensor(movie_index[i])
+    # numpy
+    for u in range(user_num):
+        user_index[u].sort()
+        user_index[u] = np.array(user_index[u], dtype=int)
+    for i in range(movie_num):
+        movie_index[i].sort()
+        movie_index[i] = np.array(movie_index[i], dtype=int)
     return user_index, movie_index
 
 
