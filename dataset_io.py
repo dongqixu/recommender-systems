@@ -1,4 +1,5 @@
 import numpy as np
+import sys
 import time
 import torch
 from operator import itemgetter
@@ -51,13 +52,18 @@ def extract_rating(user_num, movie_num, file='dataset/ratings.dat'):
     rating = sorted(rating, key=itemgetter(0, 1))
     # pytorch
     if torch.cuda.is_available():
-        rating = torch.cuda.IntTensor(rating)
-        user_rate = torch.cuda.FloatTensor(user_rate)
-        movie_rate = torch.cuda.FloatTensor(movie_rate)
+        rating = np.array(rating, dtype=int)
+        user_rate = np.array(user_rate, dtype=int)
+        movie_rate = np.array(movie_rate, dtype=int)
+        # cuda
+        rating = torch.from_numpy(rating).cuda()
+        user_rate = torch.from_numpy(user_rate).cuda()
+        movie_rate = torch.from_numpy(movie_rate).cuda()
+        print('Cuda: ', rating[0], user_rate[0:2], movie_rate[0:2])
     else:
         rating = torch.IntTensor(rating)
-        user_rate = torch.FloatTensor(user_rate)
-        movie_rate = torch.FloatTensor(movie_rate)
+        user_rate = torch.IntTensor(user_rate)
+        movie_rate = torch.IntTensor(movie_rate)
     return rating, user_rate, movie_rate
 
 
@@ -77,13 +83,27 @@ def get_record_index(user_num, movie_num, file='dataset/ratings.dat'):
     for u in range(user_num):
         user_index[u].sort()
         user_index[u] = np.array(user_index[u], dtype=int)
+        if torch.cuda.is_available() and len(user_index[u]) > 0:
+            user_index[u] = torch.from_numpy(user_index[u]).cuda()
+        elif len(user_index[u]) > 0:
+            user_index[u] = torch.from_numpy(user_index[u])
     for i in range(movie_num):
         movie_index[i].sort()
         movie_index[i] = np.array(movie_index[i], dtype=int)
+        if torch.cuda.is_available() and len(movie_index[i]) > 0:
+            movie_index[i] = torch.from_numpy(movie_index[i]).cuda()
+        elif len(movie_index[i]) > 0:
+            movie_index[i] = torch.from_numpy(movie_index[i])
     return user_index, movie_index
 
 
 if __name__ == '__main__':
+    if torch.cuda.is_available():
+        cuda_device = 0
+        if len(sys.argv) > 1:
+            cuda_device = int(sys.argv[1])
+        torch.cuda.set_device(cuda_device)
+
     start_time = time.time()
 
     movie_list = extract_movie()
@@ -114,3 +134,4 @@ if __name__ == '__main__':
                 print(u, i)
                 exit(1)
             count += 1
+    print('Pass')
