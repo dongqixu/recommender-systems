@@ -33,19 +33,29 @@ def extract_user(file='dataset/users.dat'):
 
 # add the usage of numpy
 # UserID::MovieID::Rating::Timestamp
-def extract_rating(file='dataset/ratings.dat'):
+def extract_rating(user_num, movie_num, file='dataset/ratings.dat'):
     rating = list()
+    user_rate = [0] * user_num
+    movie_rate = [0] * movie_num
     with open(file, 'r', encoding='ISO-8859-1') as rating_file:
         rating_line = read_file(rating_file)
         for line in rating_line:
-            user_id, movie_id, user_movie_rating, timestamp = line
-            rating.append((int(user_id), int(movie_id), int(user_movie_rating), int(timestamp)))
+            user_id, movie_id, user_movie_rating, _ = line
+            user_id = int(user_id) - 1
+            movie_id = int(movie_id) - 1
+            user_rate[user_id] += 1
+            movie_rate[movie_id] += 1
+            rating.append((int(user_id), int(movie_id), int(user_movie_rating)))  # remove int(timestamp)
     # pytorch
     if torch.cuda.is_available():
         rating = torch.cuda.IntTensor(rating)
+        user_rate = torch.cuda.FloatTensor(user_rate)
+        movie_rate = torch.cuda.FloatTensor(movie_rate)
     else:
-        rating = torch.IntTensor(rating)  # 32-bit integer (signed)
-    return rating
+        rating = torch.IntTensor(rating)
+        user_rate = torch.FloatTensor(user_rate)
+        movie_rate = torch.FloatTensor(movie_rate)
+    return rating, user_rate, movie_rate
 
 
 if __name__ == '__main__':
@@ -53,7 +63,7 @@ if __name__ == '__main__':
 
     movie_list = extract_movie()
     user_list = extract_user()
-    rating_list = extract_rating()
+    rating_list, user_rated_count, movie_rated_count = extract_rating(6040, 3952)
     print(f'Statistics:\n'
           f' {len(movie_list)} movies\n'
           f' {len(user_list)} users')

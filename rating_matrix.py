@@ -1,15 +1,19 @@
 import numpy as np
 import time
+import torch
 from dataset_io import extract_rating
 
 
 class RatingMatrix(object):
     # report number different from statistics
     def __init__(self, feature_num, lambda_p, lambda_q):
+        # gpu acceleration
+        self.cuda_enable = torch.cuda.is_available()
         # dataset
-        self.movie_num = 3952
         self.user_num = 6040
-        self.rating_list = extract_rating()  # numpy array
+        self.movie_num = 3952
+        self.rating_list, self.user_rate_count, self.movie_rate_count = \
+            extract_rating(self.user_num, self.movie_num)  # pytorch tensor
 
         # parameter
         self.feature_num = feature_num
@@ -17,42 +21,25 @@ class RatingMatrix(object):
         self.lambda_q = lambda_q
 
         # matrix initialization
-        self.user_matrix = np.random.random((self.user_num, self.feature_num)).astype(np.float64)
-        self.movie_matrix = np.random.random((self.feature_num, self.movie_num)).astype(np.float64)
-        # TODO
-        # self.user_rated_count = np.zeros(self.user_num, dtype=np.float64)
-        self.movie_rated_count = np.zeros(self.movie_num, dtype=np.float64)
+        if self.cuda_enable:
+            self.user_matrix = torch.cuda.FloatTensor(self.user_num, self.feature_num).uniform_(0, 1)
+            self.movie_matrix = torch.cuda.FloatTensor(self.feature_num, self.movie_num).uniform_(0, 1)
+        else:
+            self.user_matrix = torch.FloatTensor(self.user_num, self.feature_num).uniform_(0, 1)
+            self.movie_matrix = torch.FloatTensor(self.feature_num, self.movie_num).uniform_(0, 1)
 
         # transpose
-        self.transpose_rating = np.transpose(np.copy(self.rating_list))  # problem with memory sharing?
-        self.train_user_id, self.train_movie_id, self.train_rating = self.transpose_rating[0:3, :]
-        self.train_user_id -= 1
-        self.train_movie_id -= 1
-        del self.transpose_rating  # memory
+        self.transpose_rating = torch.transpose(self.rating_list, dim0=0, dim1=1)
+        self.train_user_id, self.train_movie_id, self.train_rating = self.transpose_rating
 
-        # TODO: problem with the incorrect statistics
-        user_rated_list, self.user_rated_count = np.unique(self.train_user_id, return_counts=True)
-        for test_i in range(len(user_rated_list)):
-            if user_rated_list[test_i] != test_i:
-                print(test_i)
-        # print('Test on User Rated List Passed.')
-        # TODO: Check whether it is right
-        movie_rated_list, movie_rated_count = np.unique(self.train_movie_id, return_counts=True)
-        movie_rated_dict = dict(zip(movie_rated_list, movie_rated_count))
-        for test_i in range(self.movie_num):
-            count = movie_rated_dict.get(test_i)
-            if count is not None:
-                self.movie_rated_count[test_i] = count
-        # print('Test on Movie Rated List Passed.')
-        # print(np.sum(self.user_rated_count), np.sum(self.movie_rated_count), len(self.train_rating))
-
-        self.user_rated_count = self.user_rated_count * self.lambda_p
-        self.movie_rated_count = self.movie_rated_count * self.lambda_q
-        # print(np.sum(self.user_rated_count), np.sum(self.movie_rated_count), len(self.train_rating))
+        # combine lambda
+        self.user_rate_count = torch.mul(self.user_rate_count, self.lambda_p)
+        self.movie_rate_count = torch.mul(self.movie_rate_count, self.lambda_q)
 
         print(f'Features: {self.feature_num}\n'
               f'Lambda P: {self.lambda_p}\n'
               f'Lambda Q: {self.lambda_q}\n')
+        exit(1)
 
     def get_loss_numpy(self):
         # u == i
@@ -107,16 +94,16 @@ class RatingMatrix(object):
         # each user entry
         '''lambda_p: constant, I_u: (user_num,), p_uk: (user_num, k)'''
         '''create a I_u member variable, put and give shifting'''
-        # print('Shape', self.user_matrix.shape, self.user_rated_count.shape)
-        combine = np.transpose(np.transpose(self.user_matrix) * self.user_rated_count)
+        # print('Shape', self.user_matrix.shape, self.user_rate_count.shape)
+        combine = np.transpose(np.transpose(self.user_matrix) * self.user_rate_count)
         user_down += 1e-5
         user_down += combine
         self.user_matrix *= (user_up / user_down)
         del combine
 
         # each movie entry
-        # print('Shape', self.movie_matrix.shape, self.movie_rated_count.shape)
-        combine = self.movie_matrix * self.movie_rated_count
+        # print('Shape', self.movie_matrix.shape, self.movie_rate_count.shape)
+        combine = self.movie_matrix * self.movie_rate_count
         item_down += 1e-5
         item_down += combine
         self.movie_matrix *= (item_up / item_down)
@@ -134,6 +121,8 @@ if __name__ == '__main__':
     lambda_pq_list = [0.02*(x+1) for x in range(10)]
     feature_list = [200*(x+1) for x in range(8)]
     train_epoch = 200  # 100?
+
+    R = RatingMatrix(feature_num=100, lambda_p=0.1, lambda_q=0.1)
 
     for feature_num in feature_list:
         for lambda_pq in lambda_pq_list:
