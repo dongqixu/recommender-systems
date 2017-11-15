@@ -1,7 +1,7 @@
-import numpy as np
 import time
+import torch
 
-'''Read dataset with naive approach'''
+'''Read dataset with pytorch'''
 
 
 def read_file(file, separator='::'):
@@ -40,7 +40,11 @@ def extract_rating(file='dataset/ratings.dat'):
         for line in rating_line:
             user_id, movie_id, user_movie_rating, timestamp = line
             rating.append((int(user_id), int(movie_id), int(user_movie_rating), int(timestamp)))
-    rating = np.asarray(rating, dtype=np.int)
+    # pytorch
+    if torch.cuda.is_available():
+        rating = torch.cuda.IntTensor(rating)
+    else:
+        rating = torch.IntTensor(rating)  # 32-bit integer (signed)
     return rating
 
 
