@@ -55,33 +55,39 @@ class RatingMatrix(object):
         #       f'Lambda P: {self.lambda_p}\n'
         #       f'Lambda Q: {self.lambda_q}\n')
 
+        # temp variable allocation -> numpy
+        self.user_up = np.zeros((self.user_num, self.feature_num), dtype=float)
+        self.user_down = np.zeros((self.user_num, self.feature_num), dtype=float)
+        self.item_up = np.zeros((self.feature_num, self.movie_num), dtype=float)
+        self.item_down = np.zeros((self.feature_num, self.movie_num), dtype=float)
+        # pytorch
+        self.user_up = torch.from_numpy(self.user_up)
+        self.user_down = torch.from_numpy(self.user_down)
+        self.item_up = torch.from_numpy(self.item_up)
+        self.item_down = torch.from_numpy(self.item_down)
+        if self.cuda_enable:
+            self.user_up = self.user_up.cuda()
+            self.user_down = self.user_down.cuda()
+            self.item_up = self.item_up.cuda()
+            self.item_down = self.item_down.cuda()
+
     def compute_prediction(self):
-        # u == i
-        # self.user_matrix[self.train_user_id_user_group, :] -> (u, k)
-        # self.movie_matrix[:, self.train_movie_id_user_group]) -> (k, i)
-        start_time = time.time()
         # zero init
         pointer = 0
-        # TODO: set step
         step = self.step
         self.predict_rating = self.predict_rating.fill_(0)
         for u in range(0, self.user_num, step):
+            # size of (u, i) pair
             shift = torch.sum(self.user_rate_count[u:u+step])
             user_index = self.train_user_id_user_group[pointer:pointer+shift]  # (1000209,)
-            # print(user_index.size())
             user_feature = self.user_matrix[user_index, :]  # (1000209, 100)
-            # print(user_feature.size())
-            rate_index = torch.cat(self.user_index[u:u+step])  # (1000209,) index concat
-            # print(rate_index.size())
-            movie_feature = self.movie_matrix[:, rate_index]  # (100, 1000209)
-            # print(movie_feature.size())
+            movie_index = torch.cat(self.user_index[u:u+step])  # (1000209,) index concat
+            movie_feature = self.movie_matrix[:, movie_index]  # (100, 1000209)
 
             # element wise operation -> transpose
             u_prediction = torch.mul(user_feature, torch.t(movie_feature))
-            u_prediction = torch.sum(u_prediction, dim=1)
-            self.predict_rating[pointer:pointer+shift] = u_prediction
+            self.predict_rating[pointer:pointer+shift] = torch.sum(u_prediction, dim=1)
             pointer += shift
-        print(time.time()-start_time)
 
     def get_loss(self):
         # compute prediction
@@ -92,29 +98,24 @@ class RatingMatrix(object):
 
     def update(self):
         start_time = time.time()
-        # temp variable -> numpy
-        user_up = np.zeros((self.user_num, self.feature_num), dtype=float)
-        user_down = np.zeros((self.user_num, self.feature_num), dtype=float)
-        item_up = np.zeros((self.feature_num, self.movie_num), dtype=float)
-        item_down = np.zeros((self.feature_num, self.movie_num), dtype=float)
-        # pytorch
-        user_up = torch.from_numpy(user_up)
-        user_down = torch.from_numpy(user_down)
-        item_up = torch.from_numpy(item_up)
-        item_down = torch.from_numpy(item_down)
-        if self.cuda_enable:
-            user_up = user_up.cuda()
-            user_down = user_down.cuda()
-            item_up = item_up.cuda()
-            item_down = item_down.cuda()
-            print('GPU:', user_up[0:2])
-        print('init time', time.time()-start_time)
+        # zero init
+        self.user_up = self.user_up.fill_(0)
+        self.user_down = self.user_down.fill_(0)
+        self.item_up = self.item_up.fill_(0)
+        self.item_down = self.item_down.fill_(0)
 
         # # compute prediction
         self.compute_prediction()
 
+        print('init time', time.time() - start_time)
+
         '------------------------------------------------------------------------------'
         exit(10)
+        # TODO: (k, i) * (i,) why?
+        # user_up
+        user_up_add = np.transpose(self.movie_matrix[:, self.train_movie_id] * self.train_rating[:])
+        np.add.at(user_up, self.train_user_id, user_up_add)
+        del user_up_add
 
         # TODO: (k, i) * (i,) why?
         # user_up
@@ -132,7 +133,8 @@ class RatingMatrix(object):
 
         # item_up
         # TODO: (u, k) -> (k, u) * (u,)
-        item_up_add = np.transpose(self.user_matrix[self.train_user_id_user_group, :]) * self.train_rating_user_group[:]
+        item_up_add = np.transpose(self.user_matrix[self.train_user_id_user_group, :]) \
+                      * self.train_rating_user_group[:]
         item_up_add_transpose = np.transpose(item_up_add)
         item_up_transpose = np.transpose(item_up)
         np.add.at(item_up_transpose, self.train_movie_id_user_group, item_up_add_transpose)
