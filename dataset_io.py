@@ -62,16 +62,17 @@ def extract_rating_with_count(user_num, movie_num, file='dataset/ratings.dat', u
     movie_rate_count = np.array(movie_rate_count, dtype=int)
     # pytorch
     rating = torch.from_numpy(rating)
-    user_rate_count = torch.from_numpy(user_rate_count)
-    movie_rate_count = torch.from_numpy(movie_rate_count)
+    '''output this two as numpy'''
+    # user_rate_count_numpy = torch.from_numpy(user_rate_count_numpy)
+    # movie_rate_count_numpy = torch.from_numpy(movie_rate_count_numpy)
     # GPU
     if torch.cuda.is_available():
         rating = rating.cuda()
-        user_rate_count = user_rate_count.cuda()
-        movie_rate_count = movie_rate_count.cuda()
-    #     print('GPU:\n', rating[0], user_rate_count[0:2], movie_rate_count[0:2])
+        # user_rate_count_numpy = user_rate_count_numpy.cuda()
+        # movie_rate_count_numpy = movie_rate_count_numpy.cuda()
+    #     print('GPU:\n', rating[0], user_rate_count_numpy[0:2], movie_rate_count_numpy[0:2])
     # else:
-    #     print('CPU:\n', rating[0], user_rate_count[0:2], movie_rate_count[0:2])
+    #     print('CPU:\n', rating[0], user_rate_count_numpy[0:2], movie_rate_count_numpy[0:2])
     return rating, user_rate_count, movie_rate_count
 
 
