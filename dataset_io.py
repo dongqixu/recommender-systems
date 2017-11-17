@@ -51,7 +51,7 @@ def extract_rating_with_count(user_num, movie_num, file='dataset/ratings.dat', u
             movie_rate_count[movie_id] += 1
             # append list
             rating.append((int(user_id), int(movie_id), int(user_movie_rating)))  # remove int(timestamp)
-    # TODO: sorted order -> user, movie
+    # sorted order -> user, movie
     if user_movie_order:
         rating = sorted(rating, key=itemgetter(0, 1))
     else:
@@ -119,7 +119,7 @@ if __name__ == '__main__':
     start_time = time.time()
     movie_list = extract_movie()
     user_list = extract_user()
-    rating_list, user_rate_count_list, movie_rate_count_list = extract_rating_with_count(6040, 3952)
+    rating_list_user_first, user_rate_count_list, movie_rate_count_list = extract_rating_with_count(6040, 3952)
     rating_list_movie_first, _, _ = extract_rating_with_count(6040, 3952, user_movie_order=False)
     # print(f'Statistics:\n'
     #       f' {len(movie_list)} movies\n'
@@ -130,8 +130,8 @@ if __name__ == '__main__':
     # print('Rating format:\n'
     #       ' UserID::MovieID::Rating::Timestamp')
     # print(f'Shape and Sample:\n'
-    #       f' {rating_list.shape}\n'
-    #       f' {rating_list[0:5]}')
+    #       f' {rating_list_user_group.shape}\n'
+    #       f' {rating_list_user_group[0:5]}')
     end_time = time.time()
     print(f'Time to extract rating list: {end_time - start_time}')
 
@@ -146,7 +146,8 @@ if __name__ == '__main__':
             print('Exit with rate count mismatch')
             exit(1)
         for i in range(user_rate_count_list[u]):
-            if rating_list[count][0] != u or rating_list[count][1] != user_index_list[u][i]:
+            if rating_list_user_first[count][0] != u or \
+                            rating_list_user_first[count][1] != user_index_list[u][i]:
                 print('Exit with rating list mismatch')
                 exit(2)
             count += 1
