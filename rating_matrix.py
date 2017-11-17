@@ -9,8 +9,8 @@ class RatingMatrix(object):
     # report number different from statistics
     def __init__(self, feature_num, lambda_p, lambda_q):
         # parameter
-        self.user_step = 6040//10
-        self.movie_step = 3952//10
+        self.user_step = 6040
+        self.movie_step = 3952
         self.feature_num = feature_num
         self.lambda_p = lambda_p
         self.lambda_q = lambda_q
@@ -21,43 +21,42 @@ class RatingMatrix(object):
         self.user_num = 6040
         self.movie_num = 3952
         # rating list in two shape
-        self.rating_list, self.user_rate_count, self.movie_rate_count = \
+        self.rating_list_user_first, self.user_rate_count, self.movie_rate_count = \
             extract_rating_with_count(self.user_num, self.movie_num)
-        self.rating_list_movie, _, _ = \
+        self.rating_list_movie_first, _, _ = \
             extract_rating_with_count(self.user_num, self.movie_num, user_movie_order=False)
         self.user_index, self.movie_index = get_rating_index(self.user_num, self.movie_num)
-        '''bug'''
+        '''double type for combination of lambda'''
         self.user_rate_count_double = self.user_rate_count.double()
         self.movie_rate_count_double = self.movie_rate_count.double()
 
         # matrix initialization -> numpy
         self.user_matrix = np.random.random((self.user_num, self.feature_num)).astype(float)
         self.movie_matrix = np.random.random((self.feature_num, self.movie_num)).astype(float)
-        self.predict_rating = np.zeros(len(self.rating_list), dtype=float)
-        self.predict_rating_movie_group = np.zeros(len(self.rating_list), dtype=float)
+        self.predict_rating_user_group = np.zeros(len(self.rating_list_user_first), dtype=float)
+        self.predict_rating_movie_group = np.zeros(len(self.rating_list_movie_first), dtype=float)
         # pytorch
         self.user_matrix = torch.from_numpy(self.user_matrix)
         self.movie_matrix = torch.from_numpy(self.movie_matrix)
-        self.predict_rating = torch.from_numpy(self.predict_rating)
+        self.predict_rating_user_group = torch.from_numpy(self.predict_rating_user_group)
         self.predict_rating_movie_group = torch.from_numpy(self.predict_rating_movie_group)
         if self.cuda_enable:
             print('Cuda is enabled.')
             self.user_matrix = self.user_matrix.cuda()
             self.movie_matrix = self.movie_matrix.cuda()
-            self.predict_rating = self.predict_rating.cuda()
+            self.predict_rating_user_group = self.predict_rating_user_group.cuda()
             self.predict_rating_movie_group = self.predict_rating_movie_group.cuda()
 
-        # TODO: transpose -> order?
-        self.transpose_rating_user_group = torch.transpose(self.rating_list, dim0=0, dim1=1)
+        # TODO: transpose -> order? copy problem?
+        self.transpose_rating_user_first = torch.transpose(self.rating_list_user_first, dim0=0, dim1=1)
         self.train_user_id_user_group, self.train_movie_id_user_group, self.train_rating_user_group \
-            = self.transpose_rating_user_group
-        self.transpose_rating_movie_group = torch.transpose(self.rating_list_movie, dim0=0, dim1=1)
+            = self.transpose_rating_user_first
+        self.transpose_rating_movie_group = torch.transpose(self.rating_list_movie_first, dim0=0, dim1=1)
         self.train_user_id_movie_group, self.train_movie_id_movie_group, self.train_rating_movie_group \
             = self.transpose_rating_movie_group
         # convert train rating from long to double
         self.train_rating_user_group = self.train_rating_user_group.double()
         self.train_rating_movie_group = self.train_rating_movie_group.double()
-
 
         # TODO: combine lambda
         self.user_rate_count_double = torch.mul(self.user_rate_count_double, self.lambda_p)
@@ -87,7 +86,7 @@ class RatingMatrix(object):
         # zero init
         pointer = 0
         step = self.user_step
-        self.predict_rating = self.predict_rating.fill_(0)
+        self.predict_rating_user_group = self.predict_rating_user_group.fill_(0)
         for u in range(0, self.user_num, step):
             # size of (u, i) pair
             shift = torch.sum(self.user_rate_count[u:u+step])
@@ -97,7 +96,7 @@ class RatingMatrix(object):
             movie_feature = self.movie_matrix[:, movie_index]  # (100, 1000209)
             # element wise operation -> transpose
             u_prediction = torch.mul(user_feature, torch.t(movie_feature))
-            self.predict_rating[pointer:pointer+shift] = torch.sum(u_prediction, dim=1)
+            self.predict_rating_user_group[pointer:pointer + shift] = torch.sum(u_prediction, dim=1)
             pointer += shift
         # zero init
         pointer = 0
@@ -112,14 +111,19 @@ class RatingMatrix(object):
             movie_feature = self.movie_matrix[:, movie_index]  # (100, 1000209)
             # element wise operation -> transpose
             i_prediction = torch.mul(user_feature, torch.t(movie_feature))
-            self.predict_rating[pointer:pointer+shift] = torch.sum(i_prediction, dim=1)
+            self.predict_rating_movie_group[pointer:pointer + shift] = torch.sum(i_prediction, dim=1)
             pointer += shift
 
     def get_loss(self):
         # compute prediction
         self.compute_prediction()
-        self.predict_rating = self.train_rating_user_group - self.predict_rating
-        euclidean_distance_loss = (self.predict_rating * self.predict_rating).sum()
+
+        self.predict_rating_user_group = self.train_rating_user_group - self.predict_rating_user_group
+        euclidean_distance_loss = (self.predict_rating_user_group * self.predict_rating_user_group).sum()
+        print(euclidean_distance_loss)
+        self.predict_rating_movie_group = self.train_rating_movie_group - self.predict_rating_movie_group
+        euclidean_distance_loss = (self.predict_rating_movie_group * self.predict_rating_movie_group).sum()
+        print(euclidean_distance_loss)
         return euclidean_distance_loss
 
     def update(self):
@@ -148,7 +152,7 @@ class RatingMatrix(object):
             _k, _i = movie_feature.size()
             # print(_i, _k)
             u_true_rating = self.train_rating_user_group[pointer:pointer+shift]
-            u_prediction = self.predict_rating[pointer:pointer+shift]
+            u_prediction = self.predict_rating_user_group[pointer:pointer + shift]
             user_up_add = torch.t(movie_feature) * u_true_rating.unsqueeze(1).expand(_i, _k)
             user_down_add = torch.t(movie_feature) * u_prediction.unsqueeze(1).expand(_i, _k)
             user_index = self.train_user_id_user_group[pointer:pointer + shift]  # (1000209,)
@@ -170,7 +174,7 @@ class RatingMatrix(object):
             _u, _k = user_feature.size()
             # print(_k, _u)
             i_true_rating = self.train_rating_movie_group[pointer:pointer+shift]
-            i_prediction = self.predict_rating_movie_group[pointer:pointer+shift]
+            i_prediction = self.predict_rating_movie_group[pointer:pointer + shift]
             item_up_add = torch.t(user_feature) * i_true_rating.unsqueeze(0).expand(_k, _u)
             item_down_add = torch.t(user_feature) * i_prediction.unsqueeze(0).expand(_k, _u)
             movie_index = self.train_movie_id_movie_group[pointer:pointer + shift]  # (1000209,)
@@ -222,6 +226,7 @@ if __name__ == '__main__':
     train_epoch = 200  # 100?
 
     R = RatingMatrix(feature_num=100, lambda_p=0.1, lambda_q=0.1)
+    R.get_loss()
     for i in range(100):
         print('---------------------loss:', R.get_loss())
         R.update()

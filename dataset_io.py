@@ -130,8 +130,8 @@ if __name__ == '__main__':
     # print('Rating format:\n'
     #       ' UserID::MovieID::Rating::Timestamp')
     # print(f'Shape and Sample:\n'
-    #       f' {rating_list_user_group.shape}\n'
-    #       f' {rating_list_user_group[0:5]}')
+    #       f' {rating_list_user_first.shape}\n'
+    #       f' {rating_list_user_first[0:5]}')
     end_time = time.time()
     print(f'Time to extract rating list: {end_time - start_time}')
 
