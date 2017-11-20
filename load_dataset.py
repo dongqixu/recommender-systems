@@ -47,7 +47,7 @@ def check_movie_id(file_read, movie_id):
 def merge_dataset(dir_path, merge_file):
     start_time = time.time()
     file_list = list_dir(dir_path)
-    print(file_list)
+    # print(file_list)
 
     count = 0
     for file_read in file_list:
