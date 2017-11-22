@@ -107,3 +107,5 @@ ENV/
 .DS_Store
 *.txt
 *.sh
+movie_group/
+user_group/

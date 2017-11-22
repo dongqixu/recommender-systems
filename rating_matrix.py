@@ -2,7 +2,7 @@ import numpy as np
 import sys
 import time
 import torch
-from dataset_io import extract_rating_with_count, get_rating_index
+from dataset_io import extract_rating_with_count
 
 
 class RatingMatrix(object):
@@ -25,7 +25,7 @@ class RatingMatrix(object):
             extract_rating_with_count(self.user_num, self.movie_num)
         self.rating_list_movie_first, _, _ = \
             extract_rating_with_count(self.user_num, self.movie_num, user_movie_order=False)
-        self.user_index, self.movie_index = get_rating_index(self.user_num, self.movie_num)
+        # self.user_index, self.movie_index = get_rating_index(self.user_num, self.movie_num)
         '''double type for combination of lambda'''
         self.user_rate_count_double = torch.from_numpy(self.user_rate_count_numpy).double()
         self.movie_rate_count_double = torch.from_numpy(self.movie_rate_count_numpy).double()
