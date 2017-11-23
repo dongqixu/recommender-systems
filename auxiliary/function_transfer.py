@@ -11,6 +11,5 @@ def print_function():
     loop(local_function)
 
 
-
 if __name__ == '__main__':
     print_function()

@@ -201,12 +201,15 @@ class RatingMatrix(object):
         self.euclidean_distance_loss += torch.sum(
             self.predict_rating_user_group[0:shift] * self.predict_rating_user_group[0:shift])
 
-    '''not write'''
+    '''draft'''
     def update(self):
         # user related
         # zero init
         step = self.user_step
         for u_head in range(0, self.user_num, self.batch_user_step):
+            '''fuck!!!'''
+            # deprecated
+            break
             pointer = 0
             self.loading_batch(group='user', batch=int(u_head / self.batch_user_step))
             for _u in range(0, self.batch_user_step, self.user_step):
@@ -277,7 +280,8 @@ class RatingMatrix(object):
                 ''''''
                 # TODO: problem!
                 if shift >= 100000:
-                    print('jump for debugging')
+                    self.movie_jump_update(_pointer=pointer, _shift=shift, step=step, i=i)
+                    print('jump for memory usage')
                     pointer += shift
                     continue
                 ''''''
@@ -303,17 +307,57 @@ class RatingMatrix(object):
                 movie_index = movie_index - i
                 torch.t(self.item_up).index_add_(0, movie_index, torch.t(item_up_add))
                 torch.t(self.item_down).index_add_(0, movie_index, torch.t(item_down_add))
-                pointer += shift
+                pointer += shift  # update pointer
                 # TODO: must be error at the end
                 # each movie entry
                 # print('Shape', self.movie_matrix.shape, self.movie_rate_count_numpy.shape)
-                combine = self.movie_matrix[:, i:i+step] * self.movie_rate_count_double[i:i+step].\
-                    unsqueeze(0).expand(self.feature_num, step)
+                combine = self.movie_matrix[:, i:i+step] * self.movie_rate_count_double[i:i+step].unsqueeze(
+                    0).expand(self.feature_num, step)
                 self.item_down[:, 0:step] += 1e-5
                 self.item_down[:, 0:step] += combine
                 self.movie_matrix[:, i:i+step] = self.movie_matrix[:, i:i+step] * (
                     self.item_up[:, 0:step] / self.item_down[:, 0:step])
         ''''''
+
+    # once it
+    def movie_jump_update(self, _pointer, _shift, step, i):
+        # shift >= 10000
+        shift = 50000
+        for _p in range(0, _shift, 50000):
+            pointer = _pointer + _p
+            if pointer + shift >= _shift:
+                shift = _shift - pointer
+            user_index = self.train_user_id_movie_group[pointer:pointer + shift]  # (1000209,)
+            user_feature = self.user_matrix[user_index, :]  # (1000209, 100)
+            movie_index = self.train_movie_id_movie_group[pointer:pointer + shift]  # (1000209,)
+            movie_feature = self.movie_matrix[:, movie_index]  # (100, 1000209)
+            # element wise operation -> transpose
+            i_prediction = torch.mul(user_feature, torch.t(movie_feature))
+            print(i_prediction.size(0))
+            self.predict_rating_movie_group[_p:_p+shift] = torch.sum(i_prediction, dim=1)
+            '''no storage for each prediction, function to be added!'''
+            __u, __k = user_feature.size()
+            i_true_rating = self.train_rating_movie_group[pointer:pointer + shift]
+            i_prediction = self.predict_rating_movie_group[_p:_p+shift]
+            item_up_add = torch.t(user_feature) * i_true_rating.unsqueeze(0).expand(__k, __u)
+            item_down_add = torch.t(user_feature) * i_prediction.unsqueeze(0).expand(__k, __u)
+            # TODO: index problem
+            # every time to reset
+            self.item_up = self.item_up.fill_(0)
+            self.item_down = self.item_down.fill_(0)
+            # TODO: is it ok?
+            movie_index = movie_index - i
+            torch.t(self.item_up).index_add_(0, movie_index, torch.t(item_up_add))
+            torch.t(self.item_down).index_add_(0, movie_index, torch.t(item_down_add))
+        # TODO: only cover the small part!
+        # each movie entry
+        # print('Shape', self.movie_matrix.shape, self.movie_rate_count_numpy.shape)
+        combine = self.movie_matrix[:, i:i + step] * self.movie_rate_count_double[i:i + step].unsqueeze(
+            0).expand(self.feature_num, step)
+        self.item_down[:, 0:step] += 1e-5
+        self.item_down[:, 0:step] += combine
+        self.movie_matrix[:, i:i + step] = self.movie_matrix[:, i:i + step] * (
+            self.item_up[:, 0:step] / self.item_down[:, 0:step])
 
     def get_time(self):
         current = time.time()
@@ -341,12 +385,13 @@ if __name__ == '__main__':
     R = RatingMatrix(feature_num=1000, lambda_p=0.02, lambda_q=0.02)
     R.set_time()
     for i in range(30):
+        R.update()
         start_time = time.time()
         loss = R.get_loss()
         use_time = R.get_time()
         print(f'-------------------loss: {loss} time: {use_time}')
         log.write(f'-------------------loss: {loss} time: {use_time}\n')
-        R.update()
+        # R.update()
         use_time = R.get_time()
         print(f'time: {use_time}')
         log.write(f'time: {use_time}\n')
