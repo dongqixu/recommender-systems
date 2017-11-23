@@ -42,6 +42,7 @@ class RatingMatrix(object):
         # init load?
         # self.loading_batch(group='user', batch=0)
         # self.loading_batch(group='movie', batch=0)
+        self.euclidean_distance_loss = None
 
         # full loading -> long
         self.user_rate_count_numpy, self.movie_rate_count_numpy = load_rate_count_numpy()
@@ -110,7 +111,7 @@ class RatingMatrix(object):
             self.train_rating_movie_group = self.train_rating_movie_group.double()
 
     '''draft'''
-    def compute_prediction(self):
+    def compute_prediction(self, func_user=None, func_movie=None, func_middle=None):
         # zero init
         step = self.user_step
         for u_head in range(0, self.user_num, self.batch_user_step):
@@ -135,10 +136,17 @@ class RatingMatrix(object):
                 print(u_prediction.size())
                 self.predict_rating_user_group[0:shift] = torch.sum(u_prediction, dim=1)
                 '''no storage for each prediction, function to be added!'''
+                if func_user is not None:
+                    func_user(shift, _u)
                 pointer += shift
-                print('succeed once')
-                break
-            break
+            #     print('succeed once')
+            #     break
+            # break
+        if func_middle is not None:
+            _value = func_middle()
+            if _value == 0:
+                print('exit inside function')
+                return
         # zero init
         step = self.movie_step
         for i_head in range(0, self.movie_num, self.batch_movie_step):
@@ -164,25 +172,27 @@ class RatingMatrix(object):
                 self.predict_rating_movie_group[0:shift] = torch.sum(i_prediction, dim=1)
                 # TODO: hey
                 '''no storage for each prediction, function to be added!'''
+                if func_movie is not None:
+                    func_movie()
                 pointer += shift
-                print('succeed twice')
-                exit(405)
-                break
+                # print('succeed twice')
+                # exit(405)
+                # break
 
-    '''not write'''
+    '''draft'''
     # get loss does not compute prediction
     def get_loss(self):
-        # compute prediction
-        # self.compute_prediction()
-        # init_time = time.time()
-        self.predict_rating_user_group = self.train_rating_user_group - self.predict_rating_user_group
-        euclidean_distance_loss = torch.sum(self.predict_rating_user_group * self.predict_rating_user_group)
-        # print('loss computation time: ', time.time() - init_time)
-        # print(euclidean_distance_loss)
-        # self.predict_rating_movie_group = self.train_rating_movie_group - self.predict_rating_movie_group
-        # euclidean_distance_loss = (self.predict_rating_movie_group * self.predict_rating_movie_group).sum()
-        # print(euclidean_distance_loss)
-        return euclidean_distance_loss
+        def zero_to_exit():
+            return 0
+        self.euclidean_distance_loss = 0
+        self.compute_prediction(func_user=self.get_loss_core, func_middle=zero_to_exit)
+        return self.euclidean_distance_loss
+
+    def get_loss_core(self, shift=None, _u=None):
+        self.predict_rating_user_group[0:shift] = \
+            self.train_rating_user_group[_u:_u+shift] - self.predict_rating_user_group[0:shift]
+        self.euclidean_distance_loss += torch.sum(
+            self.predict_rating_user_group[0:shift] * self.predict_rating_user_group[0:shift])
 
     '''not write'''
     def update(self):
@@ -293,7 +303,8 @@ if __name__ == '__main__':
     log = open('loss.txt', 'w')
 
     R = RatingMatrix(feature_num=1000, lambda_p=0.02, lambda_q=0.02)
-    R.compute_prediction()
+    loss = R.get_loss()
+    print(f'loss: {loss}')
 
     # parameter setting
     lambda_pq_list = [0.02*(x+1) for x in range(10)]

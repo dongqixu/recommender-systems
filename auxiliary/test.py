@@ -1,4 +1,4 @@
-import restore_mat
+from auxiliary import restore_mat
 from numpy import *
 
 mat_name = 'user_group'
@@ -19,8 +19,8 @@ while (1):
 
 mat = array(mat)
 
-restore_mat.store_submat(0,mat[0:10], mat_name)
-restore_mat.store_submat(10,mat[10:],mat_name)
+restore_mat.store_submat(0, mat[0:10], mat_name)
+restore_mat.store_submat(10, mat[10:], mat_name)
 
 
 m1 = restore_mat.get_submat(0, mat_name)
