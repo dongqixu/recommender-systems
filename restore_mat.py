@@ -23,5 +23,3 @@ def get_submat(i1, mat_name):
         i = i + 1
     return np.array(submat)
 
-
-

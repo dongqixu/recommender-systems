@@ -109,3 +109,4 @@ ENV/
 *.sh
 movie_group/
 user_group/
+rate_count.hdf5
