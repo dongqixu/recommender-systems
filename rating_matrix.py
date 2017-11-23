@@ -8,13 +8,14 @@ from data_block import load_rating_list, load_rate_count_numpy
 
 class RatingMatrix(object):
     # report number different from statistics
-    def __init__(self, feature_num, lambda_p, lambda_q):
+    def __init__(self, feature_num, lambda_p, lambda_q, drop_out=False):
+        self.drop_out = drop_out
         # parameter
         coefficient = 10
         self.batch_user_step = 30000  # 480189 // coefficient  # large step for loading batch
         self.batch_movie_step = 1000  # 17770 // coefficient
-        self.user_step = 250 * 1  # small step for each computation
-        self.movie_step = 10 * 1
+        self.user_step = 125 * 1  # small step for each computation
+        self.movie_step = 5 * 1
         # TODO: calculate 100480507
         self.loading_length_rating = 500000  # maximum of rating number
         self.loading_length_user = self.user_step  # maximum of user number
@@ -221,6 +222,12 @@ class RatingMatrix(object):
                 # size of (u, i) pair
                 shift = np.sum(self.user_rate_count_numpy[u:u + step])
                 print(':', u_head, _u, shift)
+                '''drop out'''
+                if self.drop_out and np.random.randint(10) >= 5:
+                    print('Dropout!')
+                    pointer += shift
+                    continue
+                '''drop out'''
                 user_index = self.train_user_id_user_group[pointer:pointer + shift]  # (1000209,)
                 user_feature = self.user_matrix[user_index, :]  # (1000209, 100)
                 movie_index = self.train_movie_id_user_group[pointer:pointer + shift]  # (1000209,)
@@ -275,11 +282,19 @@ class RatingMatrix(object):
                 # size of (u, i) pair
                 shift = np.sum(self.movie_rate_count_numpy[i:i + step])
                 print(':', i_head, _i, shift)
+                '''drop out'''
+                if self.drop_out and np.random.randint(10) >= 5:
+                    print('Dropout!')
+                    pointer += shift
+                    continue
+                '''drop out'''
                 ''''''
                 # TODO: problem!
-                if shift >= 100000:
+                if shift >= 60000:
                     print('jump for memory usage')
-                    self.movie_jump_update(_pointer=pointer, _shift=shift, step=step, i=i)
+                    # probability
+                    if np.random.randint(10) >= 5:
+                        self.movie_jump_update(_pointer=pointer, _shift=shift, step=step, i=i)
                     pointer += shift
                     continue
                 ''''''
@@ -386,17 +401,26 @@ if __name__ == '__main__':
             cuda_device = int(sys.argv[1])
         torch.cuda.set_device(cuda_device)
 
+    # dropout
+    drop_out = False
+    if len(sys.argv) > 2:
+        drop_out = True
+        time_string = f'{str(int(time.time()))}_drop'
+        print('Using drop out...')
+    else:
+        time_string = str(int(time.time()))
+
     # np.random.seed(0)
 
     # file operation
     line_buffer = 1
-    log = open('loss.txt', 'w', buffering=line_buffer)
+    log = open(f'loss_{time_string}.txt', 'w', buffering=line_buffer)
 
-    R = RatingMatrix(feature_num=1000, lambda_p=0.02, lambda_q=0.02)
+    R = RatingMatrix(feature_num=1000, lambda_p=0.5, lambda_q=0.5, drop_out=drop_out)
     R.set_time()
     # # only for test
     # R.save_matrix_hdf5()
-    for i in range(30):
+    for i in range(100):
         start_time = time.time()
         loss = R.get_loss()
         use_time = R.get_time()
@@ -416,7 +440,6 @@ if __name__ == '__main__':
 
     # file operation
     log.close()
-    exit(405)
 
     '''Grid search'''
     '''
