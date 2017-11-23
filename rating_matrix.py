@@ -10,12 +10,12 @@ class RatingMatrix(object):
     def __init__(self, feature_num, lambda_p, lambda_q):
         # parameter
         coefficient = 10
-        self.batch_user_step = 48000  # 480189 // coefficient  # large step for loading batch
-        self.batch_movie_step = 1700  # 17770 // coefficient
-        self.user_step = 480 * 1  # small step for each computation
-        self.movie_step = 17 * 1
+        self.batch_user_step = 4000  # 480189 // coefficient  # large step for loading batch
+        self.batch_movie_step = 150  # 17770 // coefficient
+        self.user_step = 250 * 1  # small step for each computation
+        self.movie_step = 10 * 1
         # TODO: calculate 100480507
-        self.loading_length_rating = 250000  # maximum of rating number
+        self.loading_length_rating = 100000  # maximum of rating number
         self.loading_length_user = self.user_step  # maximum of user number
         self.loading_length_movie = self.movie_step  # maximum of movie number
 
@@ -120,9 +120,12 @@ class RatingMatrix(object):
             for _u in range(0, self.batch_user_step, self.user_step):
                 self.predict_rating_user_group = self.predict_rating_user_group.fill_(0)
                 u = u_head + _u
+                # bug happen at the end loop
+                if u >= self.user_num:
+                    break
                 # size of (u, i) pair
                 shift = np.sum(self.user_rate_count_numpy[u:u + step])
-                print(shift)
+                print(':', u_head, _u, shift)
                 user_index = self.train_user_id_user_group[pointer:pointer+shift]  # (1000209,)
                 print(user_index.size())
                 user_feature = self.user_matrix[user_index, :]  # (1000209, 100)
@@ -144,6 +147,7 @@ class RatingMatrix(object):
             # break
         if func_middle is not None:
             _value = func_middle()
+            print(f'return value {_value}')
             if _value == 0:
                 print('exit inside function')
                 return
@@ -155,6 +159,9 @@ class RatingMatrix(object):
             for _i in range(0, self.batch_movie_step, self.movie_step):
                 self.predict_rating_movie_group = self.predict_rating_movie_group.fill_(0)
                 i = i_head + _i
+                # bug happen at the end loop
+                if i >= self.movie_num:
+                    break
                 # size of (u, i) pair
                 shift = np.sum(self.movie_rate_count_numpy[i:i + step])
                 print(shift)
@@ -305,6 +312,7 @@ if __name__ == '__main__':
     R = RatingMatrix(feature_num=1000, lambda_p=0.02, lambda_q=0.02)
     loss = R.get_loss()
     print(f'loss: {loss}')
+    exit(405)
 
     # parameter setting
     lambda_pq_list = [0.02*(x+1) for x in range(10)]
