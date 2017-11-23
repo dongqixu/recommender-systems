@@ -203,7 +203,6 @@ class RatingMatrix(object):
 
     '''not write'''
     def update(self):
-        start_time = time.time()
         # zero init
         self.user_up = self.user_up.fill_(0)
         self.user_down = self.user_down.fill_(0)
@@ -217,6 +216,41 @@ class RatingMatrix(object):
         print('init time, include prediction', end_time - start_time)
 
         # user related
+        ''''''
+        # zero init
+        step = self.user_step
+        for u_head in range(0, self.user_num, self.batch_user_step):
+            pointer = 0
+            self.loading_batch(group='user', batch=int(u_head / self.batch_user_step))
+            for _u in range(0, self.batch_user_step, self.user_step):
+                self.predict_rating_user_group = self.predict_rating_user_group.fill_(0)
+                u = u_head + _u
+                # bug happen at the end loop
+                if u >= self.user_num:
+                    break
+                # size of (u, i) pair
+                shift = np.sum(self.user_rate_count_numpy[u:u + step])
+                print(':', u_head, _u, shift)
+                user_index = self.train_user_id_user_group[pointer:pointer + shift]  # (1000209,)
+                print(user_index.size())
+                user_feature = self.user_matrix[user_index, :]  # (1000209, 100)
+                print(user_feature.size())
+                movie_index = self.train_movie_id_user_group[pointer:pointer + shift]  # (1000209,)
+                print(movie_index.size())
+                movie_feature = self.movie_matrix[:, movie_index]  # (100, 1000209)
+                print(movie_feature.size())
+                # element wise operation -> transpose
+                u_prediction = torch.mul(user_feature, torch.t(movie_feature))
+                print(u_prediction.size())
+                self.predict_rating_user_group[0:shift] = torch.sum(u_prediction, dim=1)
+                '''no storage for each prediction, function to be added!'''
+                if func_user is not None:
+                    func_user(shift, _u)
+                pointer += shift
+                #     print('succeed once')
+                #     break
+                # break
+        ''''''
         # zero init
         pointer = 0
         step = self.user_step
@@ -240,6 +274,42 @@ class RatingMatrix(object):
         end_time = time.time()
 
         # item related
+        ''''''
+        # zero init
+        step = self.movie_step
+        for i_head in range(0, self.movie_num, self.batch_movie_step):
+            pointer = 0
+            self.loading_batch(group='movie', batch=int(i_head / self.batch_movie_step))
+            for _i in range(0, self.batch_movie_step, self.movie_step):
+                self.predict_rating_movie_group = self.predict_rating_movie_group.fill_(0)
+                i = i_head + _i
+                # bug happen at the end loop
+                if i >= self.movie_num:
+                    break
+                # size of (u, i) pair
+                shift = np.sum(self.movie_rate_count_numpy[i:i + step])
+                print(shift)
+                user_index = self.train_user_id_movie_group[pointer:pointer + shift]  # (1000209,)
+                print(user_index.size())
+                user_feature = self.user_matrix[user_index, :]  # (1000209, 100)
+                print(user_feature.size())
+                movie_index = self.train_movie_id_movie_group[pointer:pointer + shift]  # (1000209,)
+                print(movie_index.size())
+                movie_feature = self.movie_matrix[:, movie_index]  # (100, 1000209)
+                print(movie_feature.size())
+                # element wise operation -> transpose
+                i_prediction = torch.mul(user_feature, torch.t(movie_feature))
+                print(i_prediction.size(0))
+                self.predict_rating_movie_group[0:shift] = torch.sum(i_prediction, dim=1)
+                # TODO: hey
+                '''no storage for each prediction, function to be added!'''
+                if func_movie is not None:
+                    func_movie()
+                pointer += shift
+                # print('succeed twice')
+                # exit(405)
+                # break
+        ''''''
         pointer = 0
         step = self.movie_step
         for i in range(0, self.movie_num, step):
