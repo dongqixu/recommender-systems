@@ -203,12 +203,7 @@ class RatingMatrix(object):
 
     '''not write'''
     def update(self):
-        # zero init
-        self.item_up = self.item_up.fill_(0)
-        self.item_down = self.item_down.fill_(0)
-
         # user related
-        ''''''
         # zero init
         step = self.user_step
         for u_head in range(0, self.user_num, self.batch_user_step):
@@ -220,6 +215,8 @@ class RatingMatrix(object):
                 # bug happen at the end loop
                 if u >= self.user_num:
                     break
+                if u + self.user_step >= self.user_num:
+                    step = self.user_num - u
                 # size of (u, i) pair
                 shift = np.sum(self.user_rate_count_numpy[u:u + step])
                 user_index = self.train_user_id_user_group[pointer:pointer + shift]  # (1000209,)
@@ -249,13 +246,13 @@ class RatingMatrix(object):
                 '''lambda_p: constant, I_u: (user_num,), p_uk: (user_num, k)'''
                 '''create a I_u member variable, put and give shifting'''
                 # print('Shape', self.user_matrix.shape, self.user_rate_count_numpy.shape)
-                combine = torch.t(torch.t(self.user_matrix[u:u+self.user_step, :]) *
-                                  self.user_rate_count_double[u:u+self.user_step].unsqueeze(1).expand(
-                                      self.user_step, self.feature_num))
-                self.user_down[0:self.user_step] += 1e-5
-                self.user_down[0:self.user_step] += combine
-                self.user_matrix[u:u+self.user_step] = self.user_matrix[u:u+self.user_step] * (
-                    self.user_up[0:self.user_step] / self.user_down[0:self.user_step])
+                combine = torch.t(torch.t(self.user_matrix[u:u+step, :]) *
+                                  self.user_rate_count_double[u:u+step].unsqueeze(1).expand(
+                                      step, self.feature_num))
+                self.user_down[0:step, :] += 1e-5
+                self.user_down[0:step, :] += combine
+                self.user_matrix[u:u+step, :] = self.user_matrix[u:u+step, :] * (
+                    self.user_up[0:step, :] / self.user_down[0:step, :])
         ''''''
         exit(444)
 
@@ -272,61 +269,44 @@ class RatingMatrix(object):
                 # bug happen at the end loop
                 if i >= self.movie_num:
                     break
+                if i + self.movie_step >= self.movie_num:
+                    step = self.movie_num - i
                 # size of (u, i) pair
                 shift = np.sum(self.movie_rate_count_numpy[i:i + step])
-                print(shift)
                 user_index = self.train_user_id_movie_group[pointer:pointer + shift]  # (1000209,)
-                print(user_index.size())
                 user_feature = self.user_matrix[user_index, :]  # (1000209, 100)
-                print(user_feature.size())
                 movie_index = self.train_movie_id_movie_group[pointer:pointer + shift]  # (1000209,)
-                print(movie_index.size())
                 movie_feature = self.movie_matrix[:, movie_index]  # (100, 1000209)
-                print(movie_feature.size())
                 # element wise operation -> transpose
                 i_prediction = torch.mul(user_feature, torch.t(movie_feature))
                 print(i_prediction.size(0))
                 self.predict_rating_movie_group[0:shift] = torch.sum(i_prediction, dim=1)
-                # TODO: hey
                 '''no storage for each prediction, function to be added!'''
-                if func_movie is not None:
-                    func_movie()
+                __u, __k = user_feature.size()
+                i_true_rating = self.train_rating_movie_group[pointer:pointer + shift]
+                i_prediction = self.predict_rating_movie_group[0:shift]
+                item_up_add = torch.t(user_feature) * i_true_rating.unsqueeze(0).expand(__k, __u)
+                item_down_add = torch.t(user_feature) * i_prediction.unsqueeze(0).expand(__k, __u)
+                # TODO: index problem
+                # every time to reset
+                self.item_up = self.item_up.fill_(0)
+                self.item_down = self.item_down.fill_(0)
+                # TODO: is it ok?
+                movie_index = movie_index - i
+                torch.t(self.item_up).index_add_(0, movie_index, torch.t(item_up_add))
+                torch.t(self.item_down).index_add_(0, movie_index, torch.t(item_down_add))
                 pointer += shift
-                # print('succeed twice')
-                # exit(405)
-                # break
+                # TODO: must be error at the end
+                # each movie entry
+                # print('Shape', self.movie_matrix.shape, self.movie_rate_count_numpy.shape)
+                combine = self.movie_matrix[:, i:i+step] * self.movie_rate_count_double[i:i+step].\
+                    unsqueeze(0).expand(self.feature_num, step)
+                self.item_down[:, 0:step] += 1e-5
+                self.item_down[:, 0:step] += combine
+                self.movie_matrix[:, i:i+step] = self.movie_matrix[:, i:i+step] * (
+                    self.item_up[:, 0:step] / self.item_down[:, 0:step])
         ''''''
-        pointer = 0
-        step = self.movie_step
-        for i in range(0, self.movie_num, step):
-            # size of (u, i) pair
-            shift = np.sum(self.movie_rate_count_numpy[i:i + step])
-            user_index = self.train_user_id_movie_group[pointer:pointer + shift]  # (1000209,)
-            user_feature = self.user_matrix[user_index, :]  # (1000209, 100)
-            _u, _k = user_feature.size()
-            # print(_k, _u)
-            i_true_rating = self.train_rating_movie_group[pointer:pointer+shift]
-            i_prediction = self.predict_rating_movie_group[pointer:pointer + shift]
-            item_up_add = torch.t(user_feature) * i_true_rating.unsqueeze(0).expand(_k, _u)
-            item_down_add = torch.t(user_feature) * i_prediction.unsqueeze(0).expand(_k, _u)
-            movie_index = self.train_movie_id_movie_group[pointer:pointer + shift]  # (1000209,)
-            # print(item_up_add.size())
-            torch.t(self.item_up).index_add_(0, movie_index, torch.t(item_up_add))
-            torch.t(self.item_down).index_add_(0, movie_index, torch.t(item_down_add))
-            # print(self.item_up.size())  # , self.item_down.size()
-            pointer += shift
-        print('movie related compute', time.time() - end_time)
-        end_time = time.time()
 
-
-        # each movie entry
-        # print('Shape', self.movie_matrix.shape, self.movie_rate_count_numpy.shape)
-        combine = self.movie_matrix * self.movie_rate_count_double.unsqueeze(0).expand(
-            self.feature_num, self.movie_num)
-        self.item_down += 1e-5
-        self.item_down += combine
-        self.movie_matrix = self.movie_matrix * (self.item_up / self.item_down)
-        print('movie entry: ', time.time() - end_time)
 
         # print('[Pass]')
 
