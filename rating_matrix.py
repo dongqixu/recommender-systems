@@ -10,12 +10,12 @@ class RatingMatrix(object):
     def __init__(self, feature_num, lambda_p, lambda_q):
         # parameter
         coefficient = 10
-        self.batch_user_step = 4000  # 480189 // coefficient  # large step for loading batch
-        self.batch_movie_step = 150  # 17770 // coefficient
+        self.batch_user_step = 30000  # 480189 // coefficient  # large step for loading batch
+        self.batch_movie_step = 1000  # 17770 // coefficient
         self.user_step = 250 * 1  # small step for each computation
         self.movie_step = 10 * 1
         # TODO: calculate 100480507
-        self.loading_length_rating = 100000  # maximum of rating number
+        self.loading_length_rating = 300000  # maximum of rating number
         self.loading_length_user = self.user_step  # maximum of user number
         self.loading_length_movie = self.movie_step  # maximum of movie number
 
@@ -219,6 +219,7 @@ class RatingMatrix(object):
                     step = self.user_num - u
                 # size of (u, i) pair
                 shift = np.sum(self.user_rate_count_numpy[u:u + step])
+                print(':', u_head, _u, shift)
                 user_index = self.train_user_id_user_group[pointer:pointer + shift]  # (1000209,)
                 user_feature = self.user_matrix[user_index, :]  # (1000209, 100)
                 movie_index = self.train_movie_id_user_group[pointer:pointer + shift]  # (1000209,)
@@ -254,7 +255,6 @@ class RatingMatrix(object):
                 self.user_matrix[u:u+step, :] = self.user_matrix[u:u+step, :] * (
                     self.user_up[0:step, :] / self.user_down[0:step, :])
         ''''''
-        exit(444)
 
         # item related
         ''''''
@@ -273,6 +273,14 @@ class RatingMatrix(object):
                     step = self.movie_num - i
                 # size of (u, i) pair
                 shift = np.sum(self.movie_rate_count_numpy[i:i + step])
+                print(':', i_head, _i, shift)
+                ''''''
+                # TODO: problem!
+                if shift >= 100000:
+                    print('jump for debugging')
+                    pointer += shift
+                    continue
+                ''''''
                 user_index = self.train_user_id_movie_group[pointer:pointer + shift]  # (1000209,)
                 user_feature = self.user_matrix[user_index, :]  # (1000209, 100)
                 movie_index = self.train_movie_id_movie_group[pointer:pointer + shift]  # (1000209,)
@@ -307,14 +315,11 @@ class RatingMatrix(object):
                     self.item_up[:, 0:step] / self.item_down[:, 0:step])
         ''''''
 
-
-        # print('[Pass]')
-
     def get_time(self):
         current = time.time()
-        t = current - self.init_time
+        temp = current - self.init_time
         self.init_time = current
-        return t
+        return temp
 
     def set_time(self):
         self.init_time = time.time()
@@ -327,17 +332,31 @@ if __name__ == '__main__':
             cuda_device = int(sys.argv[1])
         torch.cuda.set_device(cuda_device)
 
-    np.random.seed(0)
+    # np.random.seed(0)
 
     # file operation
-    # line_buffer = 1
-    # log = open('loss.txt', 'w', buffering=line_buffer)
-    log = open('loss.txt', 'w')
+    line_buffer = 1
+    log = open('loss.txt', 'w', buffering=line_buffer)
 
     R = RatingMatrix(feature_num=1000, lambda_p=0.02, lambda_q=0.02)
-    R.update()
-    # print(f'loss: {loss}')
-    # exit(405)
+    R.set_time()
+    for i in range(30):
+        start_time = time.time()
+        loss = R.get_loss()
+        use_time = R.get_time()
+        print(f'-------------------loss: {loss} time: {use_time}')
+        log.write(f'-------------------loss: {loss} time: {use_time}\n')
+        R.update()
+        use_time = R.get_time()
+        print(f'time: {use_time}')
+        log.write(f'time: {use_time}\n')
+    loss = R.get_loss()
+    use_time = R.get_time()
+    print(f'-------------------loss: {loss} time: {use_time}')
+    log.write(f'-------------------loss: {loss} time: {use_time}\n')
+    # file operation
+    log.close()
+    exit(405)
 
     # parameter setting
     lambda_pq_list = [0.02*(x+1) for x in range(10)]
@@ -375,5 +394,4 @@ if __name__ == '__main__':
                 log.write(f'{epoch+1}\n')
             print('------------------------------------------------------------------------------------')
             log.write('------------------------------------------------------------------------------------\n')
-    # file operation
-    log.close()
+
