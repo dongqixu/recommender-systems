@@ -1,3 +1,4 @@
+import h5py
 import numpy as np
 import sys
 import time
@@ -15,7 +16,7 @@ class RatingMatrix(object):
         self.user_step = 250 * 1  # small step for each computation
         self.movie_step = 10 * 1
         # TODO: calculate 100480507
-        self.loading_length_rating = 300000  # maximum of rating number
+        self.loading_length_rating = 500000  # maximum of rating number
         self.loading_length_user = self.user_step  # maximum of user number
         self.loading_length_movie = self.movie_step  # maximum of movie number
 
@@ -175,7 +176,7 @@ class RatingMatrix(object):
                 print(movie_feature.size())
                 # element wise operation -> transpose
                 i_prediction = torch.mul(user_feature, torch.t(movie_feature))
-                print(i_prediction.size(0))
+                print(i_prediction.size())
                 self.predict_rating_movie_group[0:shift] = torch.sum(i_prediction, dim=1)
                 # TODO: hey
                 '''no storage for each prediction, function to be added!'''
@@ -207,9 +208,6 @@ class RatingMatrix(object):
         # zero init
         step = self.user_step
         for u_head in range(0, self.user_num, self.batch_user_step):
-            '''fuck!!!'''
-            # deprecated
-            break
             pointer = 0
             self.loading_batch(group='user', batch=int(u_head / self.batch_user_step))
             for _u in range(0, self.batch_user_step, self.user_step):
@@ -291,7 +289,7 @@ class RatingMatrix(object):
                 movie_feature = self.movie_matrix[:, movie_index]  # (100, 1000209)
                 # element wise operation -> transpose
                 i_prediction = torch.mul(user_feature, torch.t(movie_feature))
-                print(i_prediction.size(0))
+                print(i_prediction.size())
                 self.predict_rating_movie_group[0:shift] = torch.sum(i_prediction, dim=1)
                 '''no storage for each prediction, function to be added!'''
                 __u, __k = user_feature.size()
@@ -322,8 +320,9 @@ class RatingMatrix(object):
     # once it
     def movie_jump_update(self, _pointer, _shift, step, i):
         # shift >= 10000
-        shift = 50000
-        for _p in range(0, _shift, 50000):
+        shift_constant = 30000
+        shift = shift_constant
+        for _p in range(0, _shift, shift_constant):
             pointer = _pointer + _p
             if _p + shift >= _shift:
                 shift = _shift - _p
@@ -336,7 +335,8 @@ class RatingMatrix(object):
             movie_feature = self.movie_matrix[:, movie_index]  # (100, 1000209)
             # element wise operation -> transpose
             i_prediction = torch.mul(user_feature, torch.t(movie_feature))
-            print(i_prediction.size(0))
+            print(i_prediction.size())
+            print('debug:', self.predict_rating_movie_group.size())
             self.predict_rating_movie_group[_p:_p+shift] = torch.sum(i_prediction, dim=1)
             '''no storage for each prediction, function to be added!'''
             __u, __k = user_feature.size()
@@ -371,6 +371,13 @@ class RatingMatrix(object):
     def set_time(self):
         self.init_time = time.time()
 
+    def save_matrix_hdf5(self):
+        user_matrix = self.user_matrix.cpu().numpy()
+        movie_matrix = self.movie_matrix.cpu().numpy()
+        with h5py.File('PQ_matrix.hdf5', 'w') as file:
+            file.create_dataset('user_matrix', data=user_matrix)
+            file.create_dataset('movie_matrix', data=movie_matrix)
+
 
 if __name__ == '__main__':
     if torch.cuda.is_available():
@@ -387,14 +394,15 @@ if __name__ == '__main__':
 
     R = RatingMatrix(feature_num=1000, lambda_p=0.02, lambda_q=0.02)
     R.set_time()
+    # # only for test
+    # R.save_matrix_hdf5()
     for i in range(30):
-        R.update()
         start_time = time.time()
         loss = R.get_loss()
         use_time = R.get_time()
         print(f'-------------------loss: {loss} time: {use_time}')
         log.write(f'-------------------loss: {loss} time: {use_time}\n')
-        # R.update()
+        R.update()
         use_time = R.get_time()
         print(f'time: {use_time}')
         log.write(f'time: {use_time}\n')
@@ -402,10 +410,16 @@ if __name__ == '__main__':
     use_time = R.get_time()
     print(f'-------------------loss: {loss} time: {use_time}')
     log.write(f'-------------------loss: {loss} time: {use_time}\n')
+
+    # final storage
+    R.save_matrix_hdf5()
+
     # file operation
     log.close()
     exit(405)
 
+    '''Grid search'''
+    '''
     # parameter setting
     lambda_pq_list = [0.02*(x+1) for x in range(10)]
     feature_list = [200*(x+1) for x in range(8)]
@@ -442,4 +456,4 @@ if __name__ == '__main__':
                 log.write(f'{epoch+1}\n')
             print('------------------------------------------------------------------------------------')
             log.write('------------------------------------------------------------------------------------\n')
-
+    '''
