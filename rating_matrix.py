@@ -280,8 +280,8 @@ class RatingMatrix(object):
                 ''''''
                 # TODO: problem!
                 if shift >= 100000:
-                    self.movie_jump_update(_pointer=pointer, _shift=shift, step=step, i=i)
                     print('jump for memory usage')
+                    self.movie_jump_update(_pointer=pointer, _shift=shift, step=step, i=i)
                     pointer += shift
                     continue
                 ''''''
@@ -325,8 +325,11 @@ class RatingMatrix(object):
         shift = 50000
         for _p in range(0, _shift, 50000):
             pointer = _pointer + _p
-            if pointer + shift >= _shift:
-                shift = _shift - pointer
+            if _p + shift >= _shift:
+                shift = _shift - _p
+            '''debug'''
+            print(_p, pointer, shift)
+            '''debug'''
             user_index = self.train_user_id_movie_group[pointer:pointer + shift]  # (1000209,)
             user_feature = self.user_matrix[user_index, :]  # (1000209, 100)
             movie_index = self.train_movie_id_movie_group[pointer:pointer + shift]  # (1000209,)
