@@ -293,8 +293,7 @@ class RatingMatrix(object):
                 if shift >= 60000:
                     print('jump for memory usage')
                     # probability
-                    if self.drop_out and np.random.randint(100) >= 75:
-                        self.movie_jump_update(_pointer=pointer, _shift=shift, step=step, i=i)
+                    self.movie_jump_update(_pointer=pointer, _shift=shift, step=step, i=i)
                     pointer += shift
                     continue
                 ''''''
@@ -334,6 +333,9 @@ class RatingMatrix(object):
 
     # once it
     def movie_jump_update(self, _pointer, _shift, step, i):
+        # reset only once!
+        self.item_up = self.item_up.fill_(0)
+        self.item_down = self.item_down.fill_(0)
         # shift >= 10000
         shift_constant = 30000
         shift = shift_constant
@@ -359,10 +361,7 @@ class RatingMatrix(object):
             i_prediction = self.predict_rating_movie_group[_p:_p+shift]
             item_up_add = torch.t(user_feature) * i_true_rating.unsqueeze(0).expand(__k, __u)
             item_down_add = torch.t(user_feature) * i_prediction.unsqueeze(0).expand(__k, __u)
-            # TODO: index problem
-            # every time to reset
-            self.item_up = self.item_up.fill_(0)
-            self.item_down = self.item_down.fill_(0)
+            '''remove init component'''
             # TODO: is it ok?
             movie_index = movie_index - i
             torch.t(self.item_up).index_add_(0, movie_index, torch.t(item_up_add))
