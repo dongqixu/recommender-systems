@@ -223,7 +223,7 @@ class RatingMatrix(object):
                 shift = np.sum(self.user_rate_count_numpy[u:u + step])
                 print(':', u_head, _u, shift)
                 '''drop out'''
-                if self.drop_out and np.random.randint(10) >= 5:
+                if self.drop_out and np.random.randint(100) >= 75:
                     print('Dropout!')
                     pointer += shift
                     continue
@@ -283,7 +283,7 @@ class RatingMatrix(object):
                 shift = np.sum(self.movie_rate_count_numpy[i:i + step])
                 print(':', i_head, _i, shift)
                 '''drop out'''
-                if self.drop_out and np.random.randint(10) >= 5:
+                if self.drop_out and np.random.randint(100) >= 75:
                     print('Dropout!')
                     pointer += shift
                     continue
@@ -293,7 +293,7 @@ class RatingMatrix(object):
                 if shift >= 60000:
                     print('jump for memory usage')
                     # probability
-                    if np.random.randint(10) >= 5:
+                    if self.drop_out and np.random.randint(100) >= 75:
                         self.movie_jump_update(_pointer=pointer, _shift=shift, step=step, i=i)
                     pointer += shift
                     continue
@@ -405,10 +405,10 @@ if __name__ == '__main__':
     drop_out = False
     if len(sys.argv) > 2:
         drop_out = True
-        time_string = f'{str(int(time.time()))}_drop'
+        time_string = f'{time.strftime("%Y-%m-%d_%H-%M-%S", time.localtime())}_drop'
         print('Using drop out...')
     else:
-        time_string = str(int(time.time()))
+        time_string = time.strftime("%Y-%m-%d_%H-%M-%S", time.localtime())
 
     # np.random.seed(0)
 
@@ -416,7 +416,7 @@ if __name__ == '__main__':
     line_buffer = 1
     log = open(f'loss_{time_string}.txt', 'w', buffering=line_buffer)
 
-    R = RatingMatrix(feature_num=1000, lambda_p=0.5, lambda_q=0.5, drop_out=drop_out)
+    R = RatingMatrix(feature_num=1000, lambda_p=0.02, lambda_q=0.02, drop_out=drop_out)
     R.set_time()
     # # only for test
     # R.save_matrix_hdf5()
