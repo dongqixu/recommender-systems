@@ -223,7 +223,7 @@ class RatingMatrix(object):
                 shift = np.sum(self.user_rate_count_numpy[u:u + step])
                 print(':', u_head, _u, shift)
                 '''drop out'''
-                if self.drop_out and np.random.randint(100) >= 75:
+                if self.drop_out and np.random.randint(100) >= 50:
                     print('Dropout!')
                     pointer += shift
                     continue
@@ -415,7 +415,7 @@ if __name__ == '__main__':
     line_buffer = 1
     log = open(f'loss_{time_string}.txt', 'w', buffering=line_buffer)
 
-    R = RatingMatrix(feature_num=1000, lambda_p=0.02, lambda_q=0.02, drop_out=drop_out)
+    R = RatingMatrix(feature_num=1000, lambda_p=0.005, lambda_q=0.005, drop_out=drop_out)
     R.set_time()
     # # only for test
     # R.save_matrix_hdf5()
@@ -429,13 +429,15 @@ if __name__ == '__main__':
         use_time = R.get_time()
         print(f'time: {use_time}')
         log.write(f'time: {use_time}\n')
+
+        if drop_out and (i+1) % 25 == 0:
+            log.write(f'Writing PQ with epoch {i+1}')
+            # final storage
+            R.save_matrix_hdf5()
     loss = R.get_loss()
     use_time = R.get_time()
     print(f'-------------------loss: {loss} time: {use_time}')
     log.write(f'-------------------loss: {loss} time: {use_time}\n')
-
-    # final storage
-    R.save_matrix_hdf5()
 
     # file operation
     log.close()
