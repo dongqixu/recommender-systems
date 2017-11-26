@@ -60,8 +60,12 @@ class RatingMatrix(object):
 
         '''the key memory usage'''
         # full loading -> matrix initialization -> numpy
-        self.user_matrix = np.random.random((self.user_num, self.feature_num)).astype(float)
-        self.movie_matrix = np.random.random((self.feature_num, self.movie_num)).astype(float)
+        '''load from data'''
+        self.user_matrix = None
+        self.movie_matrix = None
+        self.load_matrix_hdf5()
+        # self.user_matrix = np.random.random((self.user_num, self.feature_num)).astype(float)
+        # self.movie_matrix = np.random.random((self.feature_num, self.movie_num)).astype(float)
         # TODO: loading length
         self.predict_rating_user_group = np.zeros(self.loading_length_rating, dtype=float)
         self.predict_rating_movie_group = np.zeros(self.loading_length_rating, dtype=float)
@@ -391,6 +395,12 @@ class RatingMatrix(object):
         with h5py.File('PQ_matrix.hdf5', 'w') as file:
             file.create_dataset('user_matrix', data=user_matrix)
             file.create_dataset('movie_matrix', data=movie_matrix)
+
+    def load_matrix_hdf5(self):
+        with h5py.File('PQ_matrix.hdf5', 'r') as file:
+            self.user_matrix = file['user_matrix'][:]
+            self.movie_matrix = file['movie_matrix'][:]
+        print('Success loading data')
 
 
 if __name__ == '__main__':
