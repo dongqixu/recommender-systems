@@ -105,8 +105,7 @@ ENV/
 # personal
 .idea/
 .DS_Store
-*.txt
-*.sh
+loss/
 movie_group/
 user_group/
 *.hdf5
