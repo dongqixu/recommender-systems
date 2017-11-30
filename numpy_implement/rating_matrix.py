@@ -1,6 +1,6 @@
 import numpy as np
 import time
-from dataset_io import extract_rating
+from numpy_implement.dataset_io import extract_rating
 
 
 class RatingMatrix(object):
