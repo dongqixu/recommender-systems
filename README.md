@@ -2,6 +2,8 @@
 
 This is a framework of the implementation of regularized single-element-based non-negative Matrix-factorization (RSNMF). It was written in python and was tested on MovieLens and Netflix dataset.
 
+Paper link: http://ieeexplore.ieee.org/document/6748996/
+
 MovieLens:
 Folder numpy_implement contains codes to perform for loop computation, matrix operation and vector computation of the algorithm. 
     dataset_io.py -> function to load dataset
